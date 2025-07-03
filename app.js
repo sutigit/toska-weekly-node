@@ -1,5 +1,9 @@
 import pkg from "@slack/bolt";
-import { getActivityType, fetchGithubActivity } from "./utils.js";
+import {
+  getActivityType,
+  fetchGithubActivity,
+  formatGithubActivity,
+} from "./utils.js";
 import dotenv from "dotenv";
 
 const { App } = pkg;
@@ -11,9 +15,11 @@ const app = new App({
   appToken: process.env.SLACK_APP_TOKEN,
 });
 
-const attendees = new Set();
+const attendees = new Set(); // People who have opt-in for turn roulette
 const homeTabUsers = new Set(); // Track users who have opened the home tab
-let githubInfos = {};
+
+// This will host github activities with key value pairs of { userId: github_activities }
+let githubActivitiesFrom = {};
 
 const rouletteInitElems = [
   {
@@ -131,24 +137,10 @@ const updateView = async (client, dynamicRouletteControlBlocks = []) => {
   // Update home tab for all users who have opened it
   const updatePromises = [...homeTabUsers].map(async (userId) => {
     try {
-      const userGithubInfo = githubInfos[userId] || [];
-      const githubActivitiesBlocks =
-        userGithubInfo.length > 0
-          ? userGithubInfo.map((item) => ({
-              type: "section",
-              text: {
-                type: "mrkdwn",
-                text: `*${item.repo}*: ${item.activity.type} - ${
-                  item.activity.commits?.join(", ") ||
-                  item.activity.release ||
-                  item.activity.issue ||
-                  "No details"
-                }`,
-              },
-            }))
-          : [];
+      const userGithubActivity = githubActivitiesFrom[userId] || [];
+      const githubActivitiesBlocks = formatGithubActivity(userGithubActivity);
 
-      const homeView = {
+      const updatedView = {
         type: "home",
         callback_id: "home_view",
         blocks: [
@@ -174,7 +166,7 @@ const updateView = async (client, dynamicRouletteControlBlocks = []) => {
 
       await client.views.publish({
         user_id: userId,
-        view: homeView,
+        view: updatedView,
       });
     } catch (error) {
       console.error(`Error updating home tab for user ${userId}:`, error);
@@ -368,7 +360,7 @@ app.action("end_turn_roulette", async ({ ack, body, client }) => {
   await ack();
 
   attendees.clear();
-  githubInfos = {};
+  githubActivitiesFrom = {};
 
   const extraBlocks = [
     {
@@ -397,6 +389,7 @@ app.action("get_users_github_data", async ({ ack, body, client }) => {
   try {
     const fetchedGithubInfo = await fetchGithubActivity(githubUsername);
     const formattedContent = fetchedGithubInfo.map((content) => ({
+      id: content.id,
       repo: content?.repo?.name?.split("/")[1],
       activity: {
         type: getActivityType(content?.payload),
@@ -410,9 +403,8 @@ app.action("get_users_github_data", async ({ ack, body, client }) => {
       },
     }));
 
-    githubInfos[userId] = formattedContent;
+    githubActivitiesFrom[userId] = formattedContent;
 
-    // Update only this user's home tab with their GitHub info
     await updateView(client, [
       {
         type: "actions",
@@ -429,7 +421,7 @@ app.action("clear_users_github_data", async ({ ack, body, client }) => {
   await ack();
 
   const userId = body.user.id;
-  githubInfos[userId] = [];
+  githubActivitiesFrom[userId] = [];
 
   // Update only this user's home tab to clear their GitHub info
   await updateView(client, [

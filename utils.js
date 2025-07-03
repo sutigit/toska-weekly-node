@@ -50,3 +50,24 @@ export const getActivityType = (payload) => {
 
   return "misc";
 };
+
+const formatItem = (item) => ({
+  type: "section",
+  text: {
+    type: "mrkdwn",
+    text: `*${item.repo}*: ${item.activity.type} - ${
+      item.activity.commits?.join(", ") ||
+      item.activity.release ||
+      item.activity.issue ||
+      "No details"
+    }`,
+  },
+});
+
+export const formatGithubActivity = (githubActivityLog) => {
+  console.log(JSON.stringify(githubActivityLog, null, 2));
+
+  return githubActivityLog.length > 0
+    ? githubActivityLog.map((item) => formatItem(item))
+    : [];
+};
