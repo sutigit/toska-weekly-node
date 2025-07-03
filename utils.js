@@ -51,23 +51,124 @@ export const getActivityType = (payload) => {
   return "misc";
 };
 
-const formatItem = (item) => ({
-  type: "section",
-  text: {
-    type: "mrkdwn",
-    text: `*${item.repo}*: ${item.activity.type} - ${
-      item.activity.commits?.join(", ") ||
-      item.activity.release ||
-      item.activity.issue ||
-      "No details"
-    }`,
-  },
-});
+// ...existing code...
 
-export const formatGithubActivity = (githubActivityLog) => {
-  console.log(JSON.stringify(githubActivityLog, null, 2));
+// ...existing code...
 
-  return githubActivityLog.length > 0
-    ? githubActivityLog.map((item) => formatItem(item))
-    : [];
+export const formatGithubActivity = (activities) => {
+  const grouped = {};
+
+  for (const item of activities) {
+    const { repo, activity } = item;
+    const repoName = repo;
+
+    if (!grouped[repoName]) grouped[repoName] = {};
+
+    const type = activity.type;
+
+    if (!grouped[repoName][type]) grouped[repoName][type] = [];
+
+    switch (type) {
+      case "release-published":
+        grouped[repoName][type].push(activity.release);
+        break;
+      case "issue-opened":
+      case "issue-closed":
+        grouped[repoName][type].push(activity.issue);
+        break;
+      case "commits":
+        grouped[repoName][type].push(...activity.commits);
+        break;
+      case "misc":
+        grouped[repoName][type].push("miscellaneous activity");
+        break;
+      default:
+        grouped[repoName][type].push("unknown activity");
+    }
+  }
+
+  // Order for activity types
+  const typeOrder = [
+    "release-published",
+    "issue-closed",
+    "issue-opened",
+    "commits",
+    "misc",
+  ];
+
+  // Create blocks for better formatting
+  const blocks = [];
+
+  for (const [repo, types] of Object.entries(grouped)) {
+    blocks.push({
+      type: "divider",
+    });
+
+    blocks.push({
+      type: "header",
+      text: {
+        type: "plain_text",
+        text: repo,
+      },
+    });
+
+    // Create rich text elements for activity details
+    const richTextElements = [];
+
+    // Process types in the specified order
+    for (const type of typeOrder) {
+      if (types[type]) {
+        // Only process if this type exists for this repo
+        const entries = types[type];
+
+        // Bold bullet for action type
+        richTextElements.push({
+          type: "rich_text_section",
+          elements: [
+            {
+              type: "text",
+              text: "• ",
+              style: { bold: true },
+            },
+            {
+              type: "text",
+              text: type,
+              style: { bold: true },
+            },
+          ],
+        });
+
+        // Nested entries
+        for (const entry of entries) {
+          richTextElements.push({
+            type: "rich_text_section",
+            elements: [
+              {
+                type: "text",
+                text: `  ◦ ${entry}`,
+              },
+            ],
+          });
+        }
+
+        // Add spacing between types
+        richTextElements.push({
+          type: "rich_text_section",
+          elements: [
+            {
+              type: "text",
+              text: " ",
+            },
+          ],
+        });
+      }
+    }
+
+    blocks.push({
+      type: "rich_text",
+      elements: richTextElements,
+    });
+  }
+
+  return blocks;
 };

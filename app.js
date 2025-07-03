@@ -138,7 +138,8 @@ const updateView = async (client, dynamicRouletteControlBlocks = []) => {
   const updatePromises = [...homeTabUsers].map(async (userId) => {
     try {
       const userGithubActivity = githubActivitiesFrom[userId] || [];
-      const githubActivitiesBlocks = formatGithubActivity(userGithubActivity);
+      const githubActivitiesBlocks =
+        formatGithubActivity(userGithubActivity) || [];
 
       const updatedView = {
         type: "home",
