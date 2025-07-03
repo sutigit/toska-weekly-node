@@ -1,3 +1,4 @@
+import fetch from "node-fetch";
 import pkg from "@slack/bolt";
 const { App } = pkg;
 import dotenv from "dotenv";
@@ -11,6 +12,62 @@ const app = new App({
 
 const attendees = new Set();
 const homeTabUsers = new Set(); // Track users who have opened the home tab
+let githubInfos = {};
+
+const githubUserInfo = (userId) => {
+  return [
+    {
+      type: "divider",
+    },
+    {
+      type: "header",
+      text: {
+        type: "plain_text",
+        text: "My weeks activity",
+      },
+    },
+    {
+      type: "input",
+      block_id: "github_user_block",
+      element: {
+        type: "plain_text_input",
+        action_id: "github_user_input",
+        placeholder: {
+          type: "plain_text",
+          text: "Enter GitHub username",
+        },
+      },
+      label: {
+        type: "plain_text",
+        text: "GitHub Username",
+      },
+    },
+    {
+      type: "actions",
+      block_id: "github_get_block",
+      elements: [
+        {
+          type: "button",
+          action_id: "get_github_data",
+          text: {
+            type: "plain_text",
+            text: "Get",
+          },
+          value: userId,
+        },
+        {
+          type: "button",
+          action_id: "clear_github_data",
+          text: {
+            type: "plain_text",
+            text: "Clear",
+          },
+          value: userId,
+        },
+      ],
+    },
+  ];
+};
 
 const controlsInit = [
   {
@@ -81,7 +138,7 @@ const updateAllHomeTabs = async (client, extraBlocks) => {
         type: "header",
         text: {
           type: "plain_text",
-          text: "Welcome to Toska Weekly turn roulette 🎲",
+          text: "Check-in for turn roulette",
         },
       },
       {
@@ -92,6 +149,7 @@ const updateAllHomeTabs = async (client, extraBlocks) => {
         },
       },
       ...extraBlocks,
+      ...githubUserInfo(),
     ],
   };
 
@@ -132,7 +190,7 @@ app.event("app_home_opened", async ({ event, client }) => {
             type: "header",
             text: {
               type: "plain_text",
-              text: "Welcome to Toska Weekly!",
+              text: "Check-in for turn roulette",
             },
           },
           {
@@ -146,6 +204,7 @@ app.event("app_home_opened", async ({ event, client }) => {
             type: "actions",
             elements: controlsInit,
           },
+          ...githubUserInfo(),
         ],
       },
     });
@@ -288,6 +347,7 @@ app.action("home_end_turn_roulette", async ({ ack, body, client }) => {
   await ack();
 
   attendees.clear();
+  githubInfos = {};
 
   const extraBlocks = [
     {
@@ -297,6 +357,59 @@ app.action("home_end_turn_roulette", async ({ ack, body, client }) => {
   ];
 
   await updateAllHomeTabs(client, extraBlocks);
+});
+
+const getThisWeekMondayISO = () => {
+  const now = new Date();
+  const day = now.getDay(); // 0 = Sunday
+  const diff = now.getDate() - day + (day === 0 ? -6 : 1); // adjust if Sunday
+  const monday = new Date(now.setDate(diff));
+  monday.setHours(0, 0, 0, 0);
+  return monday.toISOString();
+};
+
+const fetchGithubActivity = async (username) => {
+  const mondayISO = getThisWeekMondayISO();
+
+  const res = await fetch(
+    `https://api.github.com/users/${username}/events/public`
+  );
+  if (!res.ok) {
+    throw new Error(`GitHub error: ${res.status}`);
+  }
+
+  const events = await res.json();
+
+  // Filter events:
+  const filtered = events.filter((event) => {
+    const createdAt = new Date(event.created_at);
+    return (
+      createdAt >= new Date(mondayISO) &&
+      event.repo?.name?.includes("UniversityOfHelsinkiCS")
+    );
+  });
+
+  return filtered;
+};
+
+app.action("get_github_data", async ({ ack, body, client }) => {
+  await ack();
+
+  const userId = body.user.id;
+  const githubUsername =
+    body.view.state.values.github_user_block.github_user_input.value;
+
+  if (!githubUsername) {
+    // Handle case where no username was entered
+    console.error("No GitHub username provided");
+    return;
+  }
+
+  console.log(`GitHub username for user ${userId}: ${githubUsername}`);
+
+  const fetchedGithubInfo = await fetchGithubActivity(githubUsername);
+
+  console.log(JSON.stringify(fetchedGithubInfo, null, 2));
 });
 
 (async () => {
