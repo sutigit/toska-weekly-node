@@ -1,7 +1,8 @@
-import fetch from "node-fetch";
 import pkg from "@slack/bolt";
-const { App } = pkg;
+import { getActivityType, fetchGithubActivity } from "./utils.js";
 import dotenv from "dotenv";
+
+const { App } = pkg;
 dotenv.config();
 
 const app = new App({
@@ -14,7 +15,63 @@ const attendees = new Set();
 const homeTabUsers = new Set(); // Track users who have opened the home tab
 let githubInfos = {};
 
-const githubUserInputBlocks = [
+const rouletteInitElems = [
+  {
+    type: "button",
+    text: {
+      type: "plain_text",
+      text: "I'm In",
+    },
+    action_id: "add_user_to_turn_roulette",
+  },
+  {
+    type: "button",
+    text: {
+      type: "plain_text",
+      text: "I'm Out",
+    },
+    action_id: "remove_user_from_turn_roulette",
+  },
+];
+
+const rouletteStartElems = [
+  ...rouletteInitElems,
+  {
+    type: "button",
+    text: {
+      type: "plain_text",
+      text: "Start turn roulette 🎲",
+    },
+    style: "primary",
+    action_id: "start_turn_roulette",
+  },
+];
+
+const rouletteNextElems = [
+  {
+    type: "button",
+    text: {
+      type: "plain_text",
+      text: "Next 🎲",
+    },
+    style: "primary",
+    action_id: "start_turn_roulette",
+  },
+];
+
+const rouletteDoneElems = [
+  {
+    type: "button",
+    text: {
+      type: "plain_text",
+      text: "Done 🚩",
+    },
+    style: "primary",
+    action_id: "end_turn_roulette",
+  },
+];
+
+const githubUsernameInputBlocks = [
   {
     type: "divider",
   },
@@ -65,88 +122,30 @@ const githubUserInputBlocks = [
   },
 ];
 
-const rouletteInit = [
-  {
-    type: "button",
-    text: {
-      type: "plain_text",
-      text: "I'm In",
-    },
-    action_id: "im_in_button",
-  },
-  {
-    type: "button",
-    text: {
-      type: "plain_text",
-      text: "I'm Out",
-    },
-    action_id: "im_out_button",
-  },
-];
-
-const rouletteStart = [
-  ...rouletteInit,
-  {
-    type: "button",
-    text: {
-      type: "plain_text",
-      text: "Start turn roulette 🎲",
-    },
-    style: "primary",
-    action_id: "start_turn_roulette",
-  },
-];
-
-const rouletteNext = [
-  {
-    type: "button",
-    text: {
-      type: "plain_text",
-      text: "Next 🎲",
-    },
-    style: "primary",
-    action_id: "start_turn_roulette",
-  },
-];
-
-const rouletteDone = [
-  {
-    type: "button",
-    text: {
-      type: "plain_text",
-      text: "Done 🚩",
-    },
-    style: "primary",
-    action_id: "end_turn_roulette",
-  },
-];
-
-// Helper function to update all home tabs
-const updateView = async (client, triggerUserId, extraBlocks = []) => {
+/* HOME AND UPDATE HANDLERS --------------------------------------------------------------- */
+// Helper function to update view in home tab
+const updateView = async (client, dynamicRouletteControlBlocks = []) => {
   const attendeeNames =
     [...attendees].map((id) => `<@${id}>`).join("\n") || "_No attendees yet_";
 
   // Update home tab for all users who have opened it
   const updatePromises = [...homeTabUsers].map(async (userId) => {
     try {
-      // Get THIS user's GitHub info, not the trigger user's
       const userGithubInfo = githubInfos[userId] || [];
       const githubActivitiesBlocks =
         userGithubInfo.length > 0
-          ? [
-              ...userGithubInfo.map((item) => ({
-                type: "section",
-                text: {
-                  type: "mrkdwn",
-                  text: `*${item.repo}*: ${item.activity.type} - ${
-                    item.activity.commits?.join(", ") ||
-                    item.activity.release ||
-                    item.activity.issue ||
-                    "No details"
-                  }`,
-                },
-              })),
-            ]
+          ? userGithubInfo.map((item) => ({
+              type: "section",
+              text: {
+                type: "mrkdwn",
+                text: `*${item.repo}*: ${item.activity.type} - ${
+                  item.activity.commits?.join(", ") ||
+                  item.activity.release ||
+                  item.activity.issue ||
+                  "No details"
+                }`,
+              },
+            }))
           : [];
 
       const homeView = {
@@ -167,8 +166,8 @@ const updateView = async (client, triggerUserId, extraBlocks = []) => {
               text: `*Current attendees:*\n${attendeeNames}`,
             },
           },
-          ...extraBlocks,
-          ...githubUserInputBlocks,
+          ...dynamicRouletteControlBlocks,
+          ...githubUsernameInputBlocks,
           ...githubActivitiesBlocks,
         ],
       };
@@ -219,9 +218,9 @@ app.event("app_home_opened", async ({ event, client }) => {
           },
           {
             type: "actions",
-            elements: rouletteInit,
+            elements: rouletteInitElems,
           },
-          ...githubUserInputBlocks,
+          ...githubUsernameInputBlocks,
         ],
       },
     });
@@ -230,8 +229,9 @@ app.event("app_home_opened", async ({ event, client }) => {
   }
 });
 
-// Handle "I'm In" button in Home tab
-app.action("im_in_button", async ({ ack, body, client }) => {
+/* TURN ROULETTE HANDLERS ----------------------------------------------------------------- */
+// Handle "I'm In" button
+app.action("add_user_to_turn_roulette", async ({ ack, body, client }) => {
   await ack();
 
   const userId = body.user.id;
@@ -241,15 +241,15 @@ app.action("im_in_button", async ({ ack, body, client }) => {
   const extraBlocks = [
     {
       type: "actions",
-      elements: attendees.size === 0 ? rouletteInit : rouletteStart,
+      elements: attendees.size === 0 ? rouletteInitElems : rouletteStartElems,
     },
   ];
 
-  await updateView(client, userId, extraBlocks);
+  await updateView(client, extraBlocks);
 });
 
-// Handle "I'm Out" button in Home tab
-app.action("im_out_button", async ({ ack, body, client }) => {
+// Handle "I'm Out" button
+app.action("remove_user_from_turn_roulette", async ({ ack, body, client }) => {
   await ack();
 
   const userId = body.user.id;
@@ -259,14 +259,14 @@ app.action("im_out_button", async ({ ack, body, client }) => {
   const extraBlocks = [
     {
       type: "actions",
-      elements: attendees.size === 0 ? rouletteInit : rouletteStart,
+      elements: attendees.size === 0 ? rouletteInitElems : rouletteStartElems,
     },
   ];
 
-  await updateView(client, userId, extraBlocks);
+  await updateView(client, extraBlocks);
 });
 
-// Handle "Start turn roulette" button in Home tab
+// Handle "Start turn roulette" button
 app.action("start_turn_roulette", async ({ ack, body, client }) => {
   await ack();
 
@@ -292,7 +292,7 @@ app.action("start_turn_roulette", async ({ ack, body, client }) => {
     },
   ];
 
-  await updateView(client, userId, extraBlocks);
+  await updateView(client, extraBlocks);
 
   setTimeout(async () => {
     const rouletteAttendees = [...attendees];
@@ -320,11 +320,11 @@ app.action("start_turn_roulette", async ({ ack, body, client }) => {
         },
         {
           type: "actions",
-          elements: rouletteDone,
+          elements: rouletteDoneElems,
         },
       ];
 
-      await updateView(client, userId, lastResultBlock);
+      await updateView(client, lastResultBlock);
       return;
     }
 
@@ -355,14 +355,15 @@ app.action("start_turn_roulette", async ({ ack, body, client }) => {
       },
       {
         type: "actions",
-        elements: rouletteNext,
+        elements: rouletteNextElems,
       },
     ];
 
-    await updateView(client, userId, resultBlocks);
+    await updateView(client, resultBlocks);
   }, 1200);
 });
 
+// Handle "Done" button
 app.action("end_turn_roulette", async ({ ack, body, client }) => {
   await ack();
 
@@ -372,66 +373,15 @@ app.action("end_turn_roulette", async ({ ack, body, client }) => {
   const extraBlocks = [
     {
       type: "actions",
-      elements: rouletteInit,
+      elements: rouletteInitElems,
     },
   ];
 
-  await updateView(client, null, extraBlocks);
+  await updateView(client, extraBlocks);
 });
 
-const getThisWeekMondayISO = () => {
-  const now = new Date();
-  const day = now.getDay(); // 0 = Sunday
-  const diff = now.getDate() - day + (day === 0 ? -6 : 1); // adjust if Sunday
-  const monday = new Date(now.setDate(diff));
-  monday.setHours(0, 0, 0, 0);
-  return monday.toISOString();
-};
-
-const fetchGithubActivity = async (username) => {
-  const mondayISO = getThisWeekMondayISO();
-
-  const res = await fetch(
-    `https://api.github.com/users/${username}/events/public`
-  );
-  if (!res.ok) {
-    throw new Error(`GitHub error: ${res.status}`);
-  }
-
-  const events = await res.json();
-
-  // Filter events:
-  const filtered = events.filter((event) => {
-    const createdAt = new Date(event.created_at);
-    return (
-      createdAt >= new Date(mondayISO) &&
-      event.repo?.name?.includes("UniversityOfHelsinkiCS")
-    );
-  });
-
-  return filtered;
-};
-
-const getActivityType = (payload) => {
-  if (!payload) return "undefined";
-
-  const keys = Object.keys(payload);
-
-  if (keys.includes("commits")) {
-    return "commits";
-  }
-
-  if (keys.includes("release")) {
-    return `release-${payload.action}`;
-  }
-
-  if (keys.includes("issue")) {
-    return `issue-${payload.action}`;
-  }
-
-  return "misc";
-};
-
+/* GITHUB INFO HANDLERS ------------------------------------------------------------------- */
+// Handle "Get" button
 app.action("get_users_github_data", async ({ ack, body, client }) => {
   await ack();
 
@@ -463,10 +413,10 @@ app.action("get_users_github_data", async ({ ack, body, client }) => {
     githubInfos[userId] = formattedContent;
 
     // Update only this user's home tab with their GitHub info
-    await updateView(client, userId, [
+    await updateView(client, [
       {
         type: "actions",
-        elements: attendees.size === 0 ? rouletteInit : rouletteStart,
+        elements: attendees.size === 0 ? rouletteInitElems : rouletteStartElems,
       },
     ]);
   } catch (error) {
@@ -474,6 +424,7 @@ app.action("get_users_github_data", async ({ ack, body, client }) => {
   }
 });
 
+// Handle "Clear" button
 app.action("clear_users_github_data", async ({ ack, body, client }) => {
   await ack();
 
@@ -481,14 +432,15 @@ app.action("clear_users_github_data", async ({ ack, body, client }) => {
   githubInfos[userId] = [];
 
   // Update only this user's home tab to clear their GitHub info
-  await updateView(client, userId, [
+  await updateView(client, [
     {
       type: "actions",
-      elements: attendees.size === 0 ? rouletteInit : rouletteStart,
+      elements: attendees.size === 0 ? rouletteInitElems : rouletteStartElems,
     },
   ]);
 });
 
+/* SERVER --------------------------------------------------------------------------------- */
 (async () => {
   await app.start(process.env.PORT || 3000);
   app.logger.info("⚡️ Toska Weekly node server is running!");
