@@ -7,6 +7,7 @@ npm-debug.log
 lerna-debug.log
 tmp/
 .env*
+.git
 
 # npm pack outputs
 *.tgz
