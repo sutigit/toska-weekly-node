@@ -1,0 +1,16 @@
+{
+  "name": "toska-weekly-node",
+  "version": "2.0.0",
+  "type": "module",
+  "description": "Toska Weekly SlackApp node server",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@slack/bolt": "^4.2.0",
+    "dotenv": "^17.0.1"
+  }
+}
