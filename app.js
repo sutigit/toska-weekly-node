@@ -81,7 +81,7 @@ const updateAllHomeTabs = async (client, extraBlocks) => {
         type: "header",
         text: {
           type: "plain_text",
-          text: "Welcome to Toska Weekly!",
+          text: "Welcome to Toska Weekly turn roulette 🎲",
         },
       },
       {
@@ -236,7 +236,7 @@ app.action("home_start_turn_roulette", async ({ ack, body, client }) => {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `🎯 *Selected: <@${lastAttendee}>*`,
+            text: `🎯 *Selected <@${lastAttendee}> 🎤*`,
           },
         },
         {
@@ -271,7 +271,7 @@ app.action("home_start_turn_roulette", async ({ ack, body, client }) => {
         type: "section",
         text: {
           type: "mrkdwn",
-          text: `🎯 *Selected: <@${randomAttendee}>*`,
+          text: `🎯 *Selected <@${randomAttendee}> 🎤*`,
         },
       },
       {
