@@ -12,17 +12,6 @@ const app = new App({
 const attendees = new Set();
 const homeTabUsers = new Set(); // Track users who have opened the home tab
 
-// Store the channel ID when slash command is run
-// app.command("/open_dev_tw", async ({ ack, say, command }) => {
-//   await ack();
-//   originalChannelId = command.channel_id;
-//   console.log("Storing channel ID:", originalChannelId);
-
-//   await say(
-//     `<@${command.user_id}> started Toska Weekly! Check your Home tab to join.`
-//   );
-// });
-
 const controlsStart = [
   {
     type: "button",
@@ -223,7 +212,6 @@ app.action("home_start_turn_roulette", async ({ ack, body, client }) => {
   await updateAllHomeTabs(client, extraBlocks);
 
   setTimeout(async () => {
-    // Create a fresh array from the current attendees
     const rouletteAttendees = [...attendees];
 
     if (rouletteAttendees.length === 1) {
@@ -296,7 +284,7 @@ app.action("home_end_turn_roulette", async ({ ack, body, client }) => {
   await ack();
 
   attendees.clear();
-  // Update all home tabs with updated attendee list
+
   const extraBlocks = [
     {
       type: "actions",
