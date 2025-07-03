@@ -14,69 +14,65 @@ const attendees = new Set();
 const homeTabUsers = new Set(); // Track users who have opened the home tab
 let githubInfos = {};
 
-const githubUserInfo = (userId) => {
-  return [
-    {
-      type: "divider",
+const githubUserInputBlocks = [
+  {
+    type: "divider",
+  },
+  {
+    type: "header",
+    text: {
+      type: "plain_text",
+      text: "My weeks activity",
     },
-    {
-      type: "header",
-      text: {
+  },
+  {
+    type: "input",
+    block_id: "github_user_block",
+    element: {
+      type: "plain_text_input",
+      action_id: "github_user_input",
+      placeholder: {
         type: "plain_text",
-        text: "My weeks activity",
+        text: "Enter GitHub username",
       },
     },
-    {
-      type: "input",
-      block_id: "github_user_block",
-      element: {
-        type: "plain_text_input",
-        action_id: "github_user_input",
-        placeholder: {
+    label: {
+      type: "plain_text",
+      text: "GitHub Username",
+    },
+  },
+  {
+    type: "actions",
+    block_id: "github_get_block",
+    elements: [
+      {
+        type: "button",
+        action_id: "get_users_github_data",
+        text: {
           type: "plain_text",
-          text: "Enter GitHub username",
+          text: "Get",
         },
       },
-      label: {
-        type: "plain_text",
-        text: "GitHub Username",
+      {
+        type: "button",
+        action_id: "clear_users_github_data",
+        text: {
+          type: "plain_text",
+          text: "Clear",
+        },
       },
-    },
-    {
-      type: "actions",
-      block_id: "github_get_block",
-      elements: [
-        {
-          type: "button",
-          action_id: "get_users_github_data",
-          text: {
-            type: "plain_text",
-            text: "Get",
-          },
-          value: userId,
-        },
-        {
-          type: "button",
-          action_id: "clear_users_github_data",
-          text: {
-            type: "plain_text",
-            text: "Clear",
-          },
-          value: userId,
-        },
-      ],
-    },
-  ];
-};
+    ],
+  },
+];
 
-const controlsInit = [
+const rouletteInit = [
   {
     type: "button",
     text: {
       type: "plain_text",
       text: "I'm In",
     },
-    action_id: "home_im_in_button",
+    action_id: "im_in_button",
   },
   {
     type: "button",
@@ -84,12 +80,12 @@ const controlsInit = [
       type: "plain_text",
       text: "I'm Out",
     },
-    action_id: "home_im_out_button",
+    action_id: "im_out_button",
   },
 ];
 
-const controlsStart = [
-  ...controlsInit,
+const rouletteStart = [
+  ...rouletteInit,
   {
     type: "button",
     text: {
@@ -97,11 +93,11 @@ const controlsStart = [
       text: "Start turn roulette 🎲",
     },
     style: "primary",
-    action_id: "home_start_turn_roulette",
+    action_id: "start_turn_roulette",
   },
 ];
 
-const controlsNext = [
+const rouletteNext = [
   {
     type: "button",
     text: {
@@ -109,11 +105,11 @@ const controlsNext = [
       text: "Next 🎲",
     },
     style: "primary",
-    action_id: "home_start_turn_roulette",
+    action_id: "start_turn_roulette",
   },
 ];
 
-const controlsDone = [
+const rouletteDone = [
   {
     type: "button",
     text: {
@@ -121,41 +117,62 @@ const controlsDone = [
       text: "Done 🚩",
     },
     style: "primary",
-    action_id: "home_end_turn_roulette",
+    action_id: "end_turn_roulette",
   },
 ];
 
 // Helper function to update all home tabs
-const updateAllHomeTabs = async (client, extraBlocks) => {
+const updateView = async (client, triggerUserId, extraBlocks = []) => {
   const attendeeNames =
     [...attendees].map((id) => `<@${id}>`).join("\n") || "_No attendees yet_";
-
-  const homeView = {
-    type: "home",
-    callback_id: "home_view",
-    blocks: [
-      {
-        type: "header",
-        text: {
-          type: "plain_text",
-          text: "Check-in for turn roulette",
-        },
-      },
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: `*Current attendees:*\n${attendeeNames}`,
-        },
-      },
-      ...extraBlocks,
-      ...githubUserInfo(),
-    ],
-  };
 
   // Update home tab for all users who have opened it
   const updatePromises = [...homeTabUsers].map(async (userId) => {
     try {
+      // Get THIS user's GitHub info, not the trigger user's
+      const userGithubInfo = githubInfos[userId] || [];
+      const githubActivitiesBlocks =
+        userGithubInfo.length > 0
+          ? [
+              ...userGithubInfo.map((item) => ({
+                type: "section",
+                text: {
+                  type: "mrkdwn",
+                  text: `*${item.repo}*: ${item.activity.type} - ${
+                    item.activity.commits?.join(", ") ||
+                    item.activity.release ||
+                    item.activity.issue ||
+                    "No details"
+                  }`,
+                },
+              })),
+            ]
+          : [];
+
+      const homeView = {
+        type: "home",
+        callback_id: "home_view",
+        blocks: [
+          {
+            type: "header",
+            text: {
+              type: "plain_text",
+              text: "Check-in for turn roulette",
+            },
+          },
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `*Current attendees:*\n${attendeeNames}`,
+            },
+          },
+          ...extraBlocks,
+          ...githubUserInputBlocks,
+          ...githubActivitiesBlocks,
+        ],
+      };
+
       await client.views.publish({
         user_id: userId,
         view: homeView,
@@ -202,9 +219,9 @@ app.event("app_home_opened", async ({ event, client }) => {
           },
           {
             type: "actions",
-            elements: controlsInit,
+            elements: rouletteInit,
           },
-          ...githubUserInfo(),
+          ...githubUserInputBlocks,
         ],
       },
     });
@@ -214,44 +231,47 @@ app.event("app_home_opened", async ({ event, client }) => {
 });
 
 // Handle "I'm In" button in Home tab
-app.action("home_im_in_button", async ({ ack, body, client }) => {
+app.action("im_in_button", async ({ ack, body, client }) => {
   await ack();
 
-  attendees.add(body.user.id);
+  const userId = body.user.id;
+  attendees.add(userId);
 
   // Update all home tabs with updated attendee list
   const extraBlocks = [
     {
       type: "actions",
-      elements: attendees.size === 0 ? controlsInit : controlsStart,
+      elements: attendees.size === 0 ? rouletteInit : rouletteStart,
     },
   ];
 
-  await updateAllHomeTabs(client, extraBlocks);
+  await updateView(client, userId, extraBlocks);
 });
 
 // Handle "I'm Out" button in Home tab
-app.action("home_im_out_button", async ({ ack, body, client }) => {
+app.action("im_out_button", async ({ ack, body, client }) => {
   await ack();
 
-  attendees.delete(body.user.id);
+  const userId = body.user.id;
+  attendees.delete(userId);
 
   // Update all home tabs with updated attendee list
   const extraBlocks = [
     {
       type: "actions",
-      elements: attendees.size === 0 ? controlsInit : controlsStart,
+      elements: attendees.size === 0 ? rouletteInit : rouletteStart,
     },
   ];
 
-  await updateAllHomeTabs(client, extraBlocks);
+  await updateView(client, userId, extraBlocks);
 });
 
 // Handle "Start turn roulette" button in Home tab
-app.action("home_start_turn_roulette", async ({ ack, body, client }) => {
+app.action("start_turn_roulette", async ({ ack, body, client }) => {
   await ack();
 
-  const userWhoStarted = `<@${body.user.id}>`;
+  const userId = body.user.id;
+  const userWhoStarted = `<@${userId}>`;
 
   const extraBlocks = [
     {
@@ -272,7 +292,7 @@ app.action("home_start_turn_roulette", async ({ ack, body, client }) => {
     },
   ];
 
-  await updateAllHomeTabs(client, extraBlocks);
+  await updateView(client, userId, extraBlocks);
 
   setTimeout(async () => {
     const rouletteAttendees = [...attendees];
@@ -300,11 +320,11 @@ app.action("home_start_turn_roulette", async ({ ack, body, client }) => {
         },
         {
           type: "actions",
-          elements: controlsDone,
+          elements: rouletteDone,
         },
       ];
 
-      await updateAllHomeTabs(client, lastResultBlock);
+      await updateView(client, userId, lastResultBlock);
       return;
     }
 
@@ -335,15 +355,15 @@ app.action("home_start_turn_roulette", async ({ ack, body, client }) => {
       },
       {
         type: "actions",
-        elements: controlsNext,
+        elements: rouletteNext,
       },
     ];
 
-    await updateAllHomeTabs(client, resultBlocks);
+    await updateView(client, userId, resultBlocks);
   }, 1200);
 });
 
-app.action("home_end_turn_roulette", async ({ ack, body, client }) => {
+app.action("end_turn_roulette", async ({ ack, body, client }) => {
   await ack();
 
   attendees.clear();
@@ -352,11 +372,11 @@ app.action("home_end_turn_roulette", async ({ ack, body, client }) => {
   const extraBlocks = [
     {
       type: "actions",
-      elements: controlsInit,
+      elements: rouletteInit,
     },
   ];
 
-  await updateAllHomeTabs(client, extraBlocks);
+  await updateView(client, null, extraBlocks);
 });
 
 const getThisWeekMondayISO = () => {
@@ -420,38 +440,53 @@ app.action("get_users_github_data", async ({ ack, body, client }) => {
     body.view.state.values.github_user_block.github_user_input.value;
 
   if (!githubUsername) {
-    // Handle case where no username was entered
     console.error("No GitHub username provided");
     return;
   }
 
-  console.log(`GitHub username for user ${userId}: ${githubUsername}`);
+  try {
+    const fetchedGithubInfo = await fetchGithubActivity(githubUsername);
+    const formattedContent = fetchedGithubInfo.map((content) => ({
+      repo: content?.repo?.name?.split("/")[1],
+      activity: {
+        type: getActivityType(content?.payload),
+        action: content?.payload?.action,
+        commits:
+          content?.payload?.commits?.length === 0
+            ? undefined
+            : content.payload.commits?.map((commit) => commit.message),
+        release: content?.payload?.release?.name,
+        issue: content?.payload?.issue?.title,
+      },
+    }));
 
-  const fetchedGithubInfo = await fetchGithubActivity(githubUsername);
-  const formattedContent = fetchedGithubInfo.map((content) => ({
-    repo: content?.repo?.name?.split("/")[1], // return name of the repo_name from "UniversityOfHelsinkiCS/repo_name"
-    activity: {
-      type: getActivityType(content?.payload),
-      action: content?.payload?.action,
-      commits:
-        content?.payload?.commits?.length === 0
-          ? undefined
-          : content.payload.commits?.map((commit) => commit.message),
-      release: content?.payload?.release?.name,
-      issue: content?.payload?.issue?.title,
-    },
-  }));
-  const result = formattedContent;
+    githubInfos[userId] = formattedContent;
 
-  githubInfos[userId] = result;
+    // Update only this user's home tab with their GitHub info
+    await updateView(client, userId, [
+      {
+        type: "actions",
+        elements: attendees.size === 0 ? rouletteInit : rouletteStart,
+      },
+    ]);
+  } catch (error) {
+    console.error("Error fetching GitHub activity:", error);
+  }
 });
 
 app.action("clear_users_github_data", async ({ ack, body, client }) => {
-  const userId = body.user.id;
+  await ack();
 
-  if (userId in githubInfos) {
-    githubInfos[userId] = [];
-  }
+  const userId = body.user.id;
+  githubInfos[userId] = [];
+
+  // Update only this user's home tab to clear their GitHub info
+  await updateView(client, userId, [
+    {
+      type: "actions",
+      elements: attendees.size === 0 ? rouletteInit : rouletteStart,
+    },
+  ]);
 });
 
 (async () => {
