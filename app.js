@@ -48,7 +48,7 @@ const githubUserInfo = (userId) => {
       elements: [
         {
           type: "button",
-          action_id: "get_github_data",
+          action_id: "get_users_github_data",
           text: {
             type: "plain_text",
             text: "Get",
@@ -57,7 +57,7 @@ const githubUserInfo = (userId) => {
         },
         {
           type: "button",
-          action_id: "clear_github_data",
+          action_id: "clear_users_github_data",
           text: {
             type: "plain_text",
             text: "Clear",
@@ -392,7 +392,27 @@ const fetchGithubActivity = async (username) => {
   return filtered;
 };
 
-app.action("get_github_data", async ({ ack, body, client }) => {
+const getActivityType = (payload) => {
+  if (!payload) return "undefined";
+
+  const keys = Object.keys(payload);
+
+  if (keys.includes("commits")) {
+    return "commits";
+  }
+
+  if (keys.includes("release")) {
+    return `release-${payload.action}`;
+  }
+
+  if (keys.includes("issue")) {
+    return `issue-${payload.action}`;
+  }
+
+  return "misc";
+};
+
+app.action("get_users_github_data", async ({ ack, body, client }) => {
   await ack();
 
   const userId = body.user.id;
@@ -408,8 +428,30 @@ app.action("get_github_data", async ({ ack, body, client }) => {
   console.log(`GitHub username for user ${userId}: ${githubUsername}`);
 
   const fetchedGithubInfo = await fetchGithubActivity(githubUsername);
+  const formattedContent = fetchedGithubInfo.map((content) => ({
+    repo: content?.repo?.name?.split("/")[1], // return name of the repo_name from "UniversityOfHelsinkiCS/repo_name"
+    activity: {
+      type: getActivityType(content?.payload),
+      action: content?.payload?.action,
+      commits:
+        content?.payload?.commits?.length === 0
+          ? undefined
+          : content.payload.commits?.map((commit) => commit.message),
+      release: content?.payload?.release?.name,
+      issue: content?.payload?.issue?.title,
+    },
+  }));
+  const result = formattedContent;
 
-  console.log(JSON.stringify(fetchedGithubInfo, null, 2));
+  githubInfos[userId] = result;
+});
+
+app.action("clear_users_github_data", async ({ ack, body, client }) => {
+  const userId = body.user.id;
+
+  if (userId in githubInfos) {
+    githubInfos[userId] = [];
+  }
 });
 
 (async () => {
