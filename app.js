@@ -12,7 +12,7 @@ const app = new App({
 const attendees = new Set();
 const homeTabUsers = new Set(); // Track users who have opened the home tab
 
-const controlsStart = [
+const controlsInit = [
   {
     type: "button",
     text: {
@@ -29,6 +29,10 @@ const controlsStart = [
     },
     action_id: "home_im_out_button",
   },
+];
+
+const controlsStart = [
+  ...controlsInit,
   {
     type: "button",
     text: {
@@ -140,7 +144,7 @@ app.event("app_home_opened", async ({ event, client }) => {
           },
           {
             type: "actions",
-            elements: controlsStart,
+            elements: controlsInit,
           },
         ],
       },
@@ -160,7 +164,7 @@ app.action("home_im_in_button", async ({ ack, body, client }) => {
   const extraBlocks = [
     {
       type: "actions",
-      elements: controlsStart,
+      elements: attendees.size === 0 ? controlsInit : controlsStart,
     },
   ];
 
@@ -177,7 +181,7 @@ app.action("home_im_out_button", async ({ ack, body, client }) => {
   const extraBlocks = [
     {
       type: "actions",
-      elements: controlsStart,
+      elements: attendees.size === 0 ? controlsInit : controlsStart,
     },
   ];
 
@@ -277,7 +281,7 @@ app.action("home_start_turn_roulette", async ({ ack, body, client }) => {
     ];
 
     await updateAllHomeTabs(client, resultBlocks);
-  }, 2000);
+  }, 1200);
 });
 
 app.action("home_end_turn_roulette", async ({ ack, body, client }) => {
@@ -288,7 +292,7 @@ app.action("home_end_turn_roulette", async ({ ack, body, client }) => {
   const extraBlocks = [
     {
       type: "actions",
-      elements: controlsStart,
+      elements: controlsInit,
     },
   ];
 
