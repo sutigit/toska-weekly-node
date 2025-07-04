@@ -15,7 +15,7 @@ const app = new App({
   appToken: process.env.SLACK_APP_TOKEN,
 });
 
-const attendees = new Set(); // People who have opt-in for turn roulette
+const attendees = new Set(); // People who have opt-in for speaker roulette
 const homeTabUsers = new Set(); // Track users who have opened the home tab
 
 // This will host github activities with key value pairs of { userId: github_activities }
@@ -28,7 +28,7 @@ const rouletteInitElems = [
       type: "plain_text",
       text: "I'm In",
     },
-    action_id: "add_user_to_turn_roulette",
+    action_id: "add_user_to_speaker_roulette",
   },
   {
     type: "button",
@@ -36,7 +36,7 @@ const rouletteInitElems = [
       type: "plain_text",
       text: "I'm Out",
     },
-    action_id: "remove_user_from_turn_roulette",
+    action_id: "remove_user_from_speaker_roulette",
   },
 ];
 
@@ -46,10 +46,10 @@ const rouletteStartElems = [
     type: "button",
     text: {
       type: "plain_text",
-      text: "Start turn roulette 🎲",
+      text: "Start speaker roulette 🎲",
     },
     style: "primary",
-    action_id: "start_turn_roulette",
+    action_id: "start_speaker_roulette",
   },
 ];
 
@@ -61,7 +61,7 @@ const rouletteNextElems = [
       text: "Next 🎲",
     },
     style: "primary",
-    action_id: "start_turn_roulette",
+    action_id: "start_speaker_roulette",
   },
 ];
 
@@ -149,7 +149,7 @@ const updateView = async (client, dynamicRouletteControlBlocks = []) => {
             type: "header",
             text: {
               type: "plain_text",
-              text: "Check-in for turn roulette",
+              text: "Check-in for speaker roulette",
             },
           },
           {
@@ -199,7 +199,7 @@ app.event("app_home_opened", async ({ event, client }) => {
             type: "header",
             text: {
               type: "plain_text",
-              text: "Check-in for turn roulette",
+              text: "Check-in for speaker roulette",
             },
           },
           {
@@ -222,9 +222,9 @@ app.event("app_home_opened", async ({ event, client }) => {
   }
 });
 
-/* TURN ROULETTE HANDLERS ----------------------------------------------------------------- */
+/* SPEAKER ROULETTE HANDLERS ----------------------------------------------------------------- */
 // Handle "I'm In" button
-app.action("add_user_to_turn_roulette", async ({ ack, body, client }) => {
+app.action("add_user_to_speaker_roulette", async ({ ack, body, client }) => {
   await ack();
 
   const userId = body.user.id;
@@ -242,25 +242,28 @@ app.action("add_user_to_turn_roulette", async ({ ack, body, client }) => {
 });
 
 // Handle "I'm Out" button
-app.action("remove_user_from_turn_roulette", async ({ ack, body, client }) => {
-  await ack();
+app.action(
+  "remove_user_from_speaker_roulette",
+  async ({ ack, body, client }) => {
+    await ack();
 
-  const userId = body.user.id;
-  attendees.delete(userId);
+    const userId = body.user.id;
+    attendees.delete(userId);
 
-  // Update all home tabs with updated attendee list
-  const extraBlocks = [
-    {
-      type: "actions",
-      elements: attendees.size === 0 ? rouletteInitElems : rouletteStartElems,
-    },
-  ];
+    // Update all home tabs with updated attendee list
+    const extraBlocks = [
+      {
+        type: "actions",
+        elements: attendees.size === 0 ? rouletteInitElems : rouletteStartElems,
+      },
+    ];
 
-  await updateView(client, extraBlocks);
-});
+    await updateView(client, extraBlocks);
+  }
+);
 
-// Handle "Start turn roulette" button
-app.action("start_turn_roulette", async ({ ack, body, client }) => {
+// Handle "Start speaker roulette" button
+app.action("start_speaker_roulette", async ({ ack, body, client }) => {
   await ack();
 
   const userId = body.user.id;
@@ -274,7 +277,7 @@ app.action("start_turn_roulette", async ({ ack, body, client }) => {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `*${userWhoStarted} started turn roulette 🎲*`,
+        text: `*${userWhoStarted} started speaker roulette 🎲*`,
       },
     },
     {
@@ -301,7 +304,7 @@ app.action("start_turn_roulette", async ({ ack, body, client }) => {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `*${userWhoStarted} started turn roulette 🎲*`,
+            text: `*${userWhoStarted} started speaker roulette 🎲*`,
           },
         },
         {
@@ -336,7 +339,7 @@ app.action("start_turn_roulette", async ({ ack, body, client }) => {
         type: "section",
         text: {
           type: "mrkdwn",
-          text: `*${userWhoStarted} started turn roulette 🎲*`,
+          text: `*${userWhoStarted} started speaker roulette 🎲*`,
         },
       },
       {
